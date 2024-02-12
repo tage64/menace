@@ -3,11 +3,10 @@ use getset::Getters;
 use rand::prelude::*;
 use std::collections::HashMap;
 
-/// Initial score for a legal move.
-const INITIAL_SCORE: u32 = 4;
-const GAMMA: f32 = 1.0;
+const DECISIVE_FACTOR: f64 = 32.0;
+const DRAW_FACTOR: f64 = 0.9;
 
-const RAND_SEED: u64 = 43;
+const RAND_SEED: u64 = 42;
 
 /// The machine playing tic-tac-toe.
 #[derive(Debug, Getters)]
@@ -29,32 +28,33 @@ impl Machine {
     pub fn get_move_scores(&mut self, pos: State) -> &MoveScores {
         self.values
             .entry(pos)
-            .or_insert_with(|| MoveScores::initial(&pos, INITIAL_SCORE))
+            .or_insert_with(|| MoveScores::initial(&pos))
     }
 
     /// Select a move for a position.
-    pub fn select_move(&mut self, pos: State, verbose: bool) -> Option<Move> {
+    pub fn select_move(&mut self, pos: State) -> Option<Move> {
         let moves = self
             .values
             .entry(pos)
-            .or_insert_with(|| MoveScores::initial(&pos, INITIAL_SCORE));
-        if moves.score_sum() == 0 {
+            .or_insert_with(|| MoveScores::initial(&pos));
+        if moves.all_zero() {
             return None;
         }
-        let mut x = self.rng.gen_range(0..moves.score_sum());
-        let mut i = 0;
+        let mut x = self.rng.gen::<f64>();
+        let mut i = Move::N - 1;
         loop {
             let m = moves.move_at()[i];
             let m_score = moves.score()[m.to_usize()];
-            if verbose {
-                dbg!(x);
-                dbg!(m_score);
+            if m_score == 0.0 {
+                i -= 1;
+                continue;
             }
             if x < m_score {
                 break Some(m);
             }
             x -= m_score;
-            i += 1;
+            assert_ne!(i, 0);
+            i -= 1;
         }
     }
 
@@ -66,7 +66,7 @@ impl Machine {
         let mut moves = [Vec::new(), Vec::new()];
         let mut turn = Crosses;
         let result = loop {
-            let Some(m) = self.select_move(pos, false) else {
+            let Some(m) = self.select_move(pos) else {
                 break Win {
                     winner: turn.opponent(),
                     reason: Resignation,
@@ -81,23 +81,21 @@ impl Machine {
         };
 
         // Update scores.
-        if let Win { winner, .. } = result {
-            let looser = winner.opponent();
-            let mut k = 1.0f32;
-            for (pos, m) in moves[winner as usize].iter() {
-                self.values
+        let factors: [(Player, f64); 2] = match result {
+            Draw => [(Crosses, DRAW_FACTOR), (Naughts, DRAW_FACTOR)],
+            Win { winner, .. } => [
+                (winner, DECISIVE_FACTOR),
+                (winner.opponent(), 1.0 / DECISIVE_FACTOR),
+            ],
+        };
+        for (player, mut factor) in factors {
+            for (pos, m) in moves[player as usize].iter().rev() {
+                factor = self
+                    .values
                     .get_mut(pos)
                     .unwrap()
-                    .increase(*m, k.round() as u32);
-                k *= GAMMA;
-            }
-            let mut k = 1.0f32;
-            for (pos, m) in moves[looser as usize].iter() {
-                self.values
-                    .get_mut(pos)
-                    .unwrap()
-                    .decrease(*m, k.round() as u32);
-                k *= GAMMA;
+                    .multiply(*m, factor)
+                    .cbrt();
             }
         }
         result

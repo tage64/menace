@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use std::io::{self, Write as _};
 use std::ops::AddAssign;
 
-const TRAIN_CYCLES: u32 = 100000;
+const TRAIN_CYCLES: u32 = 10000000;
 const TRAIN_CHUNKS: u32 = 4;
 const TRAIN_CHUNK_SIZE: u32 = TRAIN_CYCLES / TRAIN_CHUNKS;
 
 fn main() -> io::Result<()> {
     let mut machine = Machine::new();
-    let mut result_chunks: Vec<HashMap<GameResult, u32>> = Vec::new();
-    for i in 0..TRAIN_CYCLES {
+    let mut result_chunks: Vec<HashMap<GameResult, u32>> = vec![HashMap::new()];
+    for i in 1..=TRAIN_CYCLES {
         let result = machine.play_training_match();
         if i % TRAIN_CHUNK_SIZE == 0 {
             if let Some(chunk) = result_chunks.last() {
@@ -69,7 +69,7 @@ fn main() -> io::Result<()> {
     let result = loop {
         if turn == machine_player {
             println!("Move scores: {}", machine.get_move_scores(pos));
-            let Some(m) = machine.select_move(pos, true) else {
+            let Some(m) = machine.select_move(pos) else {
                 break Win {
                     winner: you,
                     reason: Resignation,

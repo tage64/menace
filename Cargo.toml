@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.79"
 getset = "0.1.2"
+numfmt = "1.1.1"
 rand = "0.8.5"

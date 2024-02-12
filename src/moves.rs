@@ -81,11 +81,15 @@ impl MoveSet {
     }
 
     pub const fn all() -> Self {
-        MoveSet(usize::MAX)
+        MoveSet(usize::MAX ^ usize::MAX << Move::N)
     }
 
     pub fn from_fn(f: impl FnMut(Move) -> bool) -> Self {
         Self::all().filter(f)
+    }
+
+    pub const fn size(self) -> usize {
+        self.0.count_ones() as usize
     }
 
     pub fn contains(self, m: Move) -> bool {
@@ -129,22 +133,25 @@ mod tests {
     #[test]
     fn test_move_set() {
         // Test empty and all:
-        assert_eq!(MoveSet::empty().iter().count(), 0);
-        assert_eq!(MoveSet::all().iter().count(), Move::N);
+        assert_eq!(MoveSet::empty().size(), 0);
+        assert_eq!(MoveSet::all().size(), Move::N);
         let mut mset = MoveSet::all();
         for m in (0..Move::N).map(Move::from_usize) {
             assert!(mset.contains(m));
         }
 
         // Test remove and add:
+        let mut mset = MoveSet::all();
         let m = Move::from_usize(4);
         assert!(mset.contains(m));
         mset = mset.remove(m);
         assert!(!mset.contains(m));
+        assert_eq!(mset.size(), Move::N - 1);
         mset = mset.add(m);
+        assert_eq!(mset.size(), Move::N);
         assert!(mset.contains(m));
 
-        // Test from_fn and filter:
+        // Test from_fn, iter and filter:
         mset = MoveSet::from_fn(|m| m.to_usize() % 2 == 0);
         assert!(mset.iter().all(|m| m.to_usize() % 2 == 0));
         mset = mset.filter(|m| m.to_usize() % 3 == 0);
